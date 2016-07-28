@@ -24,10 +24,21 @@
   environment:
     MIX_ENV: "{{ mix_env }}"
 
-- name: "get release version"
-  command: bash -lc "mix run -e 'IO.puts \"RELEASE_VERSION=\" <> Mix.Project.config[:version]' | grep RELEASE_VERSION | sed 's/RELEASE_VERSION=//'" chdir="{{ project_path }}"
+- name: "get git revision"
+  command: bash -lc "git log -n1 --format=%h | tee .git-rev" chdir="{{ project_path }}"
+  register: git_revision_result
+- set_fact: git_revision="{{ git_revision_result.stdout }}"
+
+- name: "get app version"
+  command: bash -lc "elixir -e 'Code.eval_file(\"version.exs\") |> elem(0) |> IO.puts'" chdir="{{ project_path }}"
   register: app_version_result
-- set_fact: app_version="{{ app_version_result.stdout }}"
+- set_fact: app_version="{{ app_version_result.stdout }}-{{ git_revision_result.stdout }}"
+
+- name: "compile app"
+  command: bash -lc 'mix compile' chdir="{{ project_path }}"
+  environment:
+    MIX_ENV: "{{ mix_env }}"
+    PORT: "{{ app_port }}"
 
 - name: "build release"
   command: bash -lc 'SERVER=1 mix release' chdir="{{ project_path }}"
